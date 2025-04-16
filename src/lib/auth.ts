@@ -1,18 +1,6 @@
 import { createClient } from './supabase';
 import { createHash } from 'crypto';
 
-function generateValidEmail(input: string): string {
-  // Create a SHA-256 hash of the input and get first 12 characters
-  // This ensures we get a consistent, valid string for the email
-  const hash = createHash('sha256')
-    .update(input)
-    .digest('hex')
-    .slice(0, 12);
-  
-  // Create a valid email with a shorter hash prefix
-  return `user_${hash}@zupass.org`;
-}
-
 export async function signInWithZupass(pcdStr: string) {
   try {
     const supabase = createClient();
@@ -23,12 +11,18 @@ export async function signInWithZupass(pcdStr: string) {
       pcdData = JSON.parse(pcdStr);
       console.log('PCD Data:', pcdData);
     } catch (e) {
-      console.log('Failed to parse PCD data:', e);
+      console.error('Failed to parse PCD data:', e);
+      throw new Error('Invalid PCD format');
     }
 
-    // Generate a stable email and password
-    const email = generateValidEmail(pcdStr);
-    console.log('Generated email:', email);
+    // Extract email from PCD claim
+    const email = pcdData?.claim?.partialTicket?.attendeeEmail;
+    if (!email) {
+      throw new Error('PCD missing attendeeEmail');
+    }
+
+    // Extract semaphore ID for user metadata
+    const external_id = pcdData?.claim?.partialTicket?.attendeeSemaphoreId;
     
     // Use full hash for password
     const password = createHash('sha256')
@@ -49,9 +43,7 @@ export async function signInWithZupass(pcdStr: string) {
         password,
         options: {
           data: {
-            zupass_pcd: pcdStr, // Store the full PCD as metadata
-            pcd_data: pcdData, // Store the parsed PCD data if available
-            last_login: new Date().toISOString(),
+            external_id
           }
         }
       });

@@ -5,10 +5,13 @@ import { useZupassPopupMessages } from "@pcd/passport-interface/PassportPopup/re
 import { openZupassPopup } from "@pcd/passport-interface/PassportPopup/core";
 import { constructZupassPcdGetRequestUrl } from "@pcd/passport-interface/PassportInterface";
 import { ArgumentTypeName } from "@pcd/pcd-types";
-import { SemaphoreGroupPCDTypeName } from "@pcd/semaphore-group-pcd/SemaphoreGroupPCD";
-import { SemaphoreIdentityPCDTypeName } from "@pcd/semaphore-identity-pcd/SemaphoreIdentityPCD";
-import { generateSnarkMessageHash } from "@pcd/util";
 import { signInWithZupass } from "@/lib/auth";
+import {
+  ZKEdDSAEventTicketPCDTypeName,
+  EdDSATicketFieldsToReveal
+} from "@pcd/zk-eddsa-event-ticket-pcd";
+
+const ZUPASS_CLIENT_URL = "https://zupass.org";
 
 interface AuthProtectionProps {
   children: React.ReactNode;
@@ -64,54 +67,35 @@ export function AuthProtection({ children }: AuthProtectionProps) {
     setIsVerifying(true);
     setError(null);
     
-    try {
-      const ZUPASS_CLIENT_URL = "https://zupass.org";
-      const ZUPASS_SERVER_URL = "https://api.zupass.org"; 
-      const popupUrl = `${window.location.origin}/popup`;
-      
-      const ZUZALU_PARTICIPANTS_GROUP_URL = `${ZUPASS_SERVER_URL}/semaphore/1`;
-      
-      const proofUrl = constructZupassPcdGetRequestUrl(
-        ZUPASS_CLIENT_URL,
-        popupUrl,
-        SemaphoreGroupPCDTypeName,
-        {
-          externalNullifier: {
-            argumentType: ArgumentTypeName.BigInt,
-            userProvided: false,
-            value: generateSnarkMessageHash("zupasshunt").toString()
-          },
-          group: {
-            argumentType: ArgumentTypeName.Object,
-            userProvided: false,
-            remoteUrl: ZUZALU_PARTICIPANTS_GROUP_URL
-          },
-          identity: {
-            argumentType: ArgumentTypeName.PCD,
-            pcdType: SemaphoreIdentityPCDTypeName,
-            value: undefined,
-            userProvided: true
-          },
-          signal: {
-            argumentType: ArgumentTypeName.BigInt,
-            userProvided: false,
-            value: "1"
-          }
+    const popupUrl = window.location.origin + "/popup";
+    const proofUrl = constructZupassPcdGetRequestUrl(
+      ZUPASS_CLIENT_URL,
+      popupUrl,
+      ZKEdDSAEventTicketPCDTypeName,
+      {
+        /** --- constants, hidden from the user --- */
+        eventId: {
+          argumentType: ArgumentTypeName.String,
+          value: "9ccc53cb-3b0a-415b-ab0d-76cfa21c72ac",
+          userProvided: false
         },
-        {
-          title: "VERIFY WITH ZUPASS",
-          description: "Verify to see if you won!",
-          requesterUrl: window.location.origin
+        productId: {
+          argumentType: ArgumentTypeName.String,
+          value: "cd3f2b06-e520-4eff-b9ed-c52365c60848",
+          userProvided: false
+        },
+        fieldsToReveal: {
+          argumentType: ArgumentTypeName.Object,
+          value: {
+            revealAttendeeEmail: true
+          } as EdDSATicketFieldsToReveal,
+          userProvided: false
         }
-      );
-      
-      openZupassPopup(popupUrl, proofUrl);
-      
-    } catch (err) {
-      console.error("Failed to open Zupass:", err);
-      setError("Failed to connect to Zupass");
-      setIsVerifying(false);
-    }
+      },
+      { title: "SIGN IN WITH ZUPASS", description: "**Use your Vitalia ticket**" }
+    );
+    
+    openZupassPopup(popupUrl, proofUrl);
   };
 
   if (!isAuthenticated) {
