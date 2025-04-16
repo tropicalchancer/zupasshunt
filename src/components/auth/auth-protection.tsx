@@ -8,6 +8,7 @@ import { ArgumentTypeName } from "@pcd/pcd-types";
 import { SemaphoreGroupPCDTypeName } from "@pcd/semaphore-group-pcd/SemaphoreGroupPCD";
 import { SemaphoreIdentityPCDTypeName } from "@pcd/semaphore-identity-pcd/SemaphoreIdentityPCD";
 import { generateSnarkMessageHash } from "@pcd/util";
+import { signInWithZupass } from "@/lib/auth";
 
 interface AuthProtectionProps {
   children: React.ReactNode;
@@ -26,20 +27,37 @@ export function AuthProtection({ children }: AuthProtectionProps) {
     setIsVerifying(true);
     setError(null);
     
-    try {
-      if (pcdStr && typeof pcdStr === "string" && pcdStr.length > 0) {
-        // Successfully received a proof
-        setIsAuthenticated(true);
-        localStorage.setItem("zupass-authenticated", "true");
-      } else {
-        setError("Invalid proof received");
+    const handleAuth = async () => {
+      try {
+        if (pcdStr && typeof pcdStr === "string" && pcdStr.length > 0) {
+          console.log('Received PCD string:', pcdStr);
+          try {
+            const pcdData = JSON.parse(pcdStr);
+            console.log('Parsed PCD data:', pcdData);
+          } catch (e) {
+            console.log('Failed to parse PCD data in component:', e);
+          }
+          
+          // Sign in with Supabase using Zupass credentials
+          const authResult = await signInWithZupass(pcdStr);
+          console.log('Authentication result:', authResult);
+          
+          // Successfully received a proof and signed in
+          setIsAuthenticated(true);
+          localStorage.setItem("zupass-authenticated", "true");
+        } else {
+          console.error('Invalid PCD string received:', pcdStr);
+          setError("Invalid proof received");
+        }
+      } catch (err) {
+        console.error("Error processing proof:", err);
+        setError(err instanceof Error ? err.message : "Failed to process authentication");
+      } finally {
+        setIsVerifying(false);
       }
-    } catch (err) {
-      console.error("Error processing proof:", err);
-      setError("Failed to process authentication");
-    } finally {
-      setIsVerifying(false);
-    }
+    };
+
+    handleAuth();
   }, [pcdStr]);
 
   const handleVerify = () => {
